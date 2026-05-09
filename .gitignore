@@ -1,3 +1,7 @@
-# general resource files
+# general resources files and submission branch
 /src/resources
+/src
+package-lock.json
+package.json
+README.md
 
