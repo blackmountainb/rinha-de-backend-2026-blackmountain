@@ -1,6 +1,6 @@
 # general resources files and submission branch
 /src/resources
-/src
+/src/
 package-lock.json
 package.json
 README.md
