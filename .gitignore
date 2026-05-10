@@ -1,3 +1,50 @@
-# general resource files
+# Remove general resources tracking
 /src/resources
+
+# Environment files
+.env
+.env.*
+
+# Configuration files
+config.json
+settings.json
+
+# Database files
+*.sqlite
+*.db
+
+# Secrets
+secrets.*
+*.key
+*.pem
+
+# Log files
+*.log
+
+# Local development files
+*.local
+*.test
+*.bak
+
+# Docker and build files
+docker-compose.override.yml
+*.env.docker
+
+# Node.js
+node_modules/
+npm-debug.log
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.iml
+
+# Other temporary files
+*.tmp
+*.swp
+*.swo
 
