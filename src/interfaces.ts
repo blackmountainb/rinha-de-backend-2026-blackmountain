@@ -1,4 +1,4 @@
-interface PayloadRequest {
+export interface PayloadRequest {
     id: string,
     transaction: Transaction,
     customer: Customer,
@@ -41,7 +41,7 @@ interface APIResponse {
     fraud_score: number
 }
 
-type NormalizedVector = [
+export type NormalizedVector = [
     amount: number,
     installments: number,
     amountVsAvg: number,
@@ -57,3 +57,13 @@ type NormalizedVector = [
     mccRisk: number,
     merchantAvgAmount: number
 ]
+
+export interface normalizedConstants {
+    maxAmount: number;
+    maxInstallments: number;
+    amountVsAvgRatio: number;
+    maxMinutes: number;
+    maxKm: number;
+    maxTxCount24h: number;
+    maxMerchantAvgAmount: number;
+}

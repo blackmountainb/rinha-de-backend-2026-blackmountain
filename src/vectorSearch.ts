@@ -1,10 +1,16 @@
+import type { PayloadRequest, NormalizedVector } from "./interfaces.js";
+import type { normalizedConstants } from "./interfaces.js";
+import { client } from "./redis.js";
+import { normalizationConstants } from "./resources.js";
 /**
  * Preprocessing of request data to normalize values and transform it into
  * a normalized vector for vector search
  * @param request incoming request data
  * @returns normalized vector 
  */
-function normalizeRequest(request: PayloadRequest): NormalizedVector {
+async function normalizeRequest(request: PayloadRequest): Promise<NormalizedVector> {
+    const normalizationConfig = await getNormalizationConfig();
+    const mccRisk = await getMccRisk();
     const transaction = request.transaction;
     const merchant = request.merchant;
     const customer = request.customer;
@@ -12,23 +18,46 @@ function normalizeRequest(request: PayloadRequest): NormalizedVector {
     const last_transaction = request.last_transaction;
 
     const normalizedVector: NormalizedVector = [
-        limit(transaction.amount, 0),
-        limit(transaction.installments, 0),
-        limit((transaction.amount/customer.avg_amount)/0, 0),
+        limit(transaction.amount, normalizationConfig.maxAmount),
+        limit(transaction.installments, normalizationConfig.maxInstallments),
+        limit((transaction.amount/customer.avg_amount), normalizationConfig.amountVsAvgRatio),
         getHour(transaction.requested_at)/23,
         getWeekDay(transaction.requested_at)/6,
-        last_transaction ? limit(getMinutes(last_transaction.timestamp), 1) : -1,
-        last_transaction ? limit(last_transaction.km_from_current, 1) : -1,
-        limit(terminal.km_from_home, 1),
-        limit(customer.tx_count_24h, 1),
+        last_transaction ? limit(getMinutes(last_transaction.timestamp), normalizationConfig.maxMinutes) : -1,
+        last_transaction ? limit(last_transaction.km_from_current, normalizationConfig.maxKm) : -1,
+        limit(terminal.km_from_home, normalizationConfig.maxKm),
+        limit(customer.tx_count_24h, normalizationConfig.maxTxCount24h),
         terminal.is_online ? 1 : 0,
         terminal.card_present ? 1 : 0,
         customer.known_merchants.includes(merchant.id) ? 0 : 1,
-        0.5, // TO-DO: Add mcc read verification from json file
-        limit(merchant.avg_amount, 0),
+        mccRisk ? (mccRisk[merchant.mcc] ?? 0.5) : 0.5,
+        limit(merchant.avg_amount, normalizationConfig.maxMerchantAvgAmount),
     ]
 
     return normalizedVector;
+}
+
+/**
+ * gets cached normalization constants
+ * @returns normalization constant configuration data as JSON
+ */
+async function getNormalizationConfig(): Promise<normalizedConstants> {
+    const cachedData = await client.get('normalizationConstants');
+    if (cachedData) {
+        return JSON.parse(cachedData) satisfies typeof normalizationConstants;
+    }
+    throw new Error('Normalization config not found in cache');
+}
+
+/**
+ * gets cached mcc risk constants
+ * @returns merchant risk configuration data as JSON
+ */
+async function getMccRisk(): Promise<Record<string, number>> {
+    const cachedData = await client.get('mccRisk');
+    if (cachedData) return JSON.parse(cachedData);
+
+    throw new Error('Mcc risk not found in cache');
 }
 
 /** 
@@ -42,7 +71,7 @@ function limit(initialValue: number, maxValue: number): number {
     let normalizedValue = initialValue / maxValue;
 
     if (normalizedValue < 0) normalizedValue = 0;
-    if (normalizedValue > 1) normalizedValue = 0;
+    if (normalizedValue > 1) normalizedValue = 1;
 
     return normalizedValue;
 }
@@ -82,3 +111,5 @@ function getMinutes(dateTime: string): number {
 
     return minutes;
 }
+
+export default normalizeRequest;
