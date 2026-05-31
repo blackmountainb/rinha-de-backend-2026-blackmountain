@@ -2,6 +2,11 @@ import type { PayloadRequest, NormalizedVector } from "./interfaces.js";
 import type { normalizedConstants } from "./interfaces.js";
 import { client } from "./redis.js";
 import { normalizationConstants } from "./resources.js";
+import { gunzip } from 'zlib';
+import { promisify } from "util";
+
+const asyncGunzip = promisify(gunzip);
+
 /**
  * Preprocessing of request data to normalize values and transform it into
  * a normalized vector for vector search
@@ -60,6 +65,33 @@ async function getMccRisk(): Promise<Record<string, number>> {
     throw new Error('Mcc risk not found in cache');
 }
 
+// cache data retrieval
+let referencesCache: Array<{ vector: number[]; label: string}> | null = null;
+
+async function getReferencesFromRedis() {
+    const references = await client.get('references');
+
+    if (references) {
+        const compressedBuffer = Buffer.from(references, 'base64');
+        const decompress = await (await asyncGunzip(compressedBuffer)).toString();
+
+        return JSON.parse(decompress);
+    }
+
+    throw new Error('No references found in redis');
+}
+
+export async function initReferencesCache() {
+    if (!referencesCache) referencesCache = await getReferencesFromRedis();
+    return referencesCache;
+}
+
+async function getReferences() {
+    if (referencesCache) return referencesCache;
+    return await initReferencesCache();
+}
+/** Helpers */
+
 /** 
 * Normalizes value based on max amount, keeping the value inside
 * of limit interval [0.0, 0.1] 
@@ -112,4 +144,57 @@ function getMinutes(dateTime: string): number {
     return minutes;
 }
 
-export default normalizeRequest;
+/**Vector search */
+function calculateEuclidianDistance(referenceTransaction: number[], newTransaction: number[]) {
+    let totalDiffs = 0;
+    for (let i=0; i < newTransaction.length; i++) {
+        const diff = referenceTransaction[i]! - newTransaction[i]!;
+        totalDiffs += Math.pow(diff, 2);
+    }
+
+    return Math.sqrt(totalDiffs);
+}
+
+async function calculateDistances(newTransaction: NormalizedVector): Promise<Array<{ dist: number; label: string}>> {
+    const refs = await getReferences();
+
+    return refs!.map((ref: { vector: number[]; label: string }) => ({
+        dist: calculateEuclidianDistance(ref.vector, newTransaction),
+        label: ref.label,
+    }));
+}
+
+function selectKNN(K: number, neighbors: Array<{ dist: number; label: string }>) {
+    return [...neighbors]
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, K);
+}
+
+function countFraud(neighbors: Array<{ dist: number; label: string }>) {
+    return neighbors.reduce((count, neighbor) => count + (neighbor.label === 'fraud' ? 1 : 0), 0);
+}
+
+function defineFraudScore(neighbors: Array<{ dist: number; label: string }>) {
+    const fraudCount = countFraud(neighbors);
+    const total = neighbors.length;
+
+    return { fraudRate: total > 0 ? fraudCount / total : 0 };
+}
+
+async function classifyTransaction(request: PayloadRequest) {
+    const normalizedVector = await normalizeRequest(request);
+    // get all euclidian distances
+    const euclidianDistances = await calculateDistances(normalizedVector);
+
+    // select number of neighbours 
+    const knn = selectKNN(3, euclidianDistances);
+
+    const fraudScore = defineFraudScore(knn);
+
+    return {
+        approve: fraudScore.fraudRate < 0.6,
+        fraud_score: fraudScore.fraudRate
+    };
+}
+
+export default classifyTransaction;
