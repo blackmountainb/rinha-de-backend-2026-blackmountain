@@ -1,0 +1,47 @@
+services:
+  api1:
+    build: .
+    container_name: api1
+    environment:
+      - PORT=9999
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    mem_limit: 100m
+    cpus: 0.3
+  api2:
+    build: .
+    container_name: api2
+    environment:
+      - PORT=9999
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    mem_limit: 100m
+    cpus: 0.3
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "9999:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
+    mem_limit: 50m
+    cpus: 0.1
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    mem_limit: 100m
+    cpus: 0.3
+
+volumes:
+  redis_data:
