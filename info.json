@@ -1,7 +1,10 @@
 {
-    "participants": ["Beatriz Negromonte"],
-    "social": ["https://github.com/blackmountainb/", "https://www.linkedin.com/in/beatriz-nb-santos"],
-    "source-code-repo": "https://github.com/blackmountainb/rinha-de-backend-2026-blackmountain",
-    "stack": ["typescript", "postgres", "nginx", "redis"],
-    "open_to_work": false
+  "participants": ["Beatriz Negromonte"],
+  "social": [
+    "https://github.com/blackmountainb/",
+    "https://www.linkedin.com/in/beatriz-nb-santos"
+  ],
+  "source-code-repo": "https://github.com/blackmountainb/rinha-de-backend-2026-blackmountain",
+  "stack": ["typescript", "postgres", "nginx", "redis"],
+  "open_to_work": false
 }
